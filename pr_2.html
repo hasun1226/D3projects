@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>정하선_D3 Assignment</title>
+		<style type="text/css">
+			.hovered text { font-weight: 900; }
+			path.hovered { stroke-width : 5;}
+			.hovered rect { stroke : black;
+							stroke-width : 3;
+						}
+		</style>
+	</head>
+	<body>
+		<script src="https://d3js.org/d3.v6.min.js"></script>
+		<script>
+			<!-- helper functions -->
+			function translateHelper(x, y) {
+				return 'translate(' + x + ', ' + y + ')';
+			}
+			
+			function getSumBeforeInput(data, ind) {
+				let returnVal = 0;
+				let keys = Object.keys(data);
+				
+				for (i=0; i < ind; i++) {
+					returnVal = returnVal + data[keys[i]];
+				}
+				return returnVal;
+			}
+			
+			function getTeamStats(data) {
+				let returnValue = [];
+				let teamsInList = [];
+				for (i=0; i< data.length; i++) {
+					let year = new Date(data[i].year, 1, 1);
+					for (j=0; j <  data[i].rankings.length; j++) {
+						let team = data[i].rankings[j].team;
+						if (teamsInList.indexOf(team) > -1) {
+							returnValue[teamsInList.indexOf(team)].values.push({
+								year: year, rank: +(data[i].rankings[j].rank), win_rate: +(data[i].rankings[j].win_rate), diff_game: +(data[i].rankings[j].diff_game)
+							});
+						} else {
+							returnValue.push({
+								'team': team,
+								'values': [{year: year, rank: +(data[i].rankings[j].rank), win_rate: +(data[i].rankings[j].win_rate), diff_game: +(data[i].rankings[j].diff_game)}]
+							});
+							teamsInList.push(team);
+						}
+					}
+				}
+				return returnValue;
+			}
+			
+			function getRangeForCat(cat) {
+				if (cat == 'W') {
+					return [470, 0];
+				} else {
+					return [0, 470];
+				}
+			}
+			
+			function mouseHoverEvent() {
+				let team = '';
+				d3.selectAll('g.tbody g.tr').on('mouseover', function(event, d) {
+					team = d3.select(this).attr('class').replace('tr', '').trim();
+					d3.selectAll('.' + team).classed('hovered', true);
+				}).on('mouseout', function(event, d) {
+					d3.selectAll('.' + team).classed('hovered', false);
+				})
+				d3.selectAll('path.line').on('mouseover', function(event, d) {
+					team = d3.select(this).attr('class').replace('line', '').trim();
+					d3.selectAll('.' + team).classed('hovered', true);
+				}).on('mouseout', function(event, d) {
+					d3.selectAll('.' + team).classed('hovered', false);
+				})
+				d3.selectAll('g.bar').on('mouseover', function(event, d) {
+					team = d3.select(this).attr('class').replace('bar', '').trim();
+					d3.selectAll('.' + team).classed('hovered', true);
+				}).on('mouseout', function(event, d) {
+					d3.selectAll('.' + team).classed('hovered', false);
+				})
+			}
+		</script>
+		
+		<h1>2020-26241 정하선</h1>
+		<h2>KBO Rankings</h2>
+		<select id="yearList"></select>
+		<select id="category">
+			<option value="R">Rank</option>
+			<option value="W">WR</option>
+			<option value="D">DG</option>
+		</select>
+		<div>
+			<div id="table" style="display:inline-block">
+			</div>
+			<div id="lineChart" style="display:inline-block">
+			</div>
+			<div id="barChart" style="display:inline-block">
+			</div>
+		</div>
+		
+		<script>
+			
+			d3.json('data.json').then(function(in_data) {
+				const data = in_data;
+				
+				let td_width = {rank:50, team:85, W:40, D:40, L:40, win_rate:75, diff_game:70}
+		
+				let table = d3.select('#table').append('svg')
+					.attr('width', 420).attr('height', 500)
+					.append('g').attr('class', 'table')
+					.attr('transform', translateHelper(10, 10));
+					
+				let lineChart = d3.select('#lineChart').append('svg')
+					.attr('width', 600).attr('height', 500)
+					.append('g')
+					.attr('transform', translateHelper(20,10));
+					
+				let barChart = d3.select('#barChart').append('svg')
+					.attr('width', 480).attr('height', 500)
+					.append('g')
+					.attr('transform', translateHelper(20, 10));
+				
+				let selectedYear = 0;
+				let selectedCat = 'R';
+				
+				let keyList = Object.keys(td_width);
+				let teamStat = getTeamStats(data);
+				let teamList = teamStat.map(t => t.team);
+				
+				function init() {
+					<!-- populate first dropdown -->
+					d3.select('#yearList').selectAll('option').data(data).enter()
+						.append('option').attr('value', (d, i) => i).text(d => d.year);
+					
+					let rankings = data[selectedYear].rankings.sort((a, b) => a.rank - b.rank);
+					
+					<!-- generate tables -->
+					let thead = table.append('g').attr('class', 'thead')
+									.append('g').attr('class', 'tr').attr('transform', translateHelper(0, 10))
+									.selectAll('g.td').data(keyList, k => k).enter().append('g').attr('class', 'td')
+									.attr('transform', (k, i) => `translate(${getSumBeforeInput(td_width, i)}, 0)`)
+									.append('text').text(k => k)
+					
+					let tbody = table.append('g').attr('class', 'tbody').attr('transform', `translate(0, 10)`);
+					
+					let trs = tbody.selectAll('g.tr').data(rankings, r => r.team).enter()
+								.append('g').attr('class', r => `tr ${r.team}`).attr('transform', (r, i) => `translate(0, ${(i+1)*30})`);
+					
+					trs.selectAll('g.td').data(k => keyList.map(key => [key, k[key], k.team]), tuple => tuple[0])
+						.enter().append('g').attr('class', 'td')
+						.attr('transform', (d, i) => `translate(${getSumBeforeInput(td_width, i)}, 0)`)
+						.append('text').attr('fill', d => d3.interpolateSinebow(teamList.indexOf(d[2])/teamList.length)).text(d => d[1]);
+					
+					<!-- generate line chart -->
+					let teamsInYear = rankings.map(r => r.team);
+					let lineData = teamStat.filter(t => teamsInYear.indexOf(t.team) > -1);
+					
+					let x = d3.scaleTime().domain([d3.min(data, d => new Date(d.year, 1, 1)), d3.max(data, d => new Date(d.year, 1, 1))]).range([0, 560]);
+					let y = d3.scaleLinear().domain([d3.min(data, d => d3.min(d.rankings, i => +i.rank)), d3.max(data, d => d3.max(d.rankings, i => +i.rank))]).range([0, 470]);
+					
+					let line = d3.line().x(d => x(d.year)).y(d => y(d.rank));
+					
+					lineChart.append("g").attr('class', 'line_y').call(d3.axisLeft(y));
+					lineChart.append("g").attr('class', 'line_x').attr('transform', translateHelper(0, 470)).call(d3.axisBottom(x));
+					
+					for (var i in teamsInYear) {
+						let teamName = teamsInYear[i];
+						lineChart.append('path').attr('d', line(lineData.filter(t => t.team == teamName)[0].values)).attr('class', `line ${teamName}`)
+						.attr('fill', 'none').attr('stroke', d3.interpolateSinebow(teamList.indexOf(teamName)/teamList.length));
+					}
+					
+					<!-- generate stacked bar -->
+					let numGames = rankings[0].games;
+					let right_y = d3.scaleLinear().domain([0, numGames]).range([0, 470]);
+					let left_y = d3.scaleLinear().domain([0, numGames]).range([470, 0]);
+					let bar_x = d3.scaleBand().domain(teamsInYear).range([0, 440]).paddingInner(0.2).paddingOuter(0.2);
+					
+					let stats = rankings.map(r => {return {team: r.team, stats: [0, +r.W, +r.W + +r.D, +r.W + +r.D + +r.L]}});
+					
+					barChart.selectAll('g').data(stats).enter()
+					.append('g').attr('class', d => `bar ${d.team}`)
+					.selectAll('rect').data(d => ['W','D','L'].map(key => [key, d.stats, d.team], tuple => tuple[0])).enter()
+					.append('rect')
+					.attr('width', bar_x.bandwidth).attr('x', d => bar_x(d[2]))
+					.attr('height', (d, i) => left_y(d[1][i]) - left_y(d[1][i+1])).attr('y', (d, i) => left_y(d[1][i+1]))
+					.attr('fill', d => {if (d[0] == 'W') {return d3.interpolateSinebow(teamList.indexOf(d[2])/teamList.length)}
+										else if (d[0] == 'L') {return d3.rgb(d3.interpolateSinebow(teamList.indexOf(d[2])/teamList.length)).darker(2)}
+										else {return '#808080'}
+								}
+						)
+					
+					barChart.append('g').attr('class', 'left_y bar_axis').call(d3.axisLeft(left_y));
+					barChart.append('g').attr('class', 'bottom_x bar_axis').attr('transform', translateHelper(0, 470)).call(d3.axisBottom(bar_x));
+					barChart.append('g').attr('class', 'right_y bar_axis').attr('transform', translateHelper(440, 0)).call(d3.axisRight(right_y));
+					
+				}
+				
+				init();
+				<!-- mouse hover event -->
+				mouseHoverEvent();
+				
+				<!-- change year -->
+				d3.select('#yearList').on('change', function(event, k) {
+					let oldValue = selectedYear;
+					selectedYear = this.value;
+					
+					let rankings = data[selectedYear].rankings.sort((a, b) => a.rank - b.rank);
+					
+					<!-- do transition for table -->
+					table.selectAll('g.tbody').selectAll('g.tr').data(rankings, r => r.team).join(
+						enter => enter.append('g').attr('class', r => `tr ${r.team}`).attr('transform', (r, i) => `translate(0, ${(i+1)*30})`).style('opacity', 0)
+								.call(enter => enter.transition().delay(1200).duration(1200).style('opacity', 1))
+								.call(function (enter) {
+										return enter.selectAll('g.td').data(k => keyList.map(key => [key, k[key], k.team]), tuple => tuple[0])
+										.enter().append('g').attr('class', 'td')
+										.attr('transform', (d, i) => `translate(${getSumBeforeInput(td_width, i)}, 0)`)
+										.append('text').attr('fill', d => d3.interpolateSinebow(teamList.indexOf(d[2])/teamList.length)).text(d => d[1])
+								})
+						, update => update
+								.call(update => update.transition().duration(1200).attr('transform', (d, i) => `translate(0, ${(i+1)*30})`))
+								.call(function(update) {
+									return update.selectAll('g.td').data(k => keyList.map(key => [key, k[key], k.team]), tuple => tuple[0])
+										.select('text').text(d => d[1])
+								})
+						,exit => exit.remove()
+					)
+					
+					<!-- do transition for line chart -->
+					let teamsInPrev = data[oldValue].rankings.map(r => r.team);
+					let teamsInYear = rankings.map(r => r.team);
+					let lineData = teamStat.filter(t => teamsInYear.indexOf(t.team) > -1);
+					
+					let x = d3.scaleTime().domain([d3.min(data, d => new Date(d.year, 1, 1)), d3.max(data, d => new Date(d.year, 1, 1))]).range([0, 560]);
+					let y = d3.scaleLinear().domain([
+							d3.min(data, d => {
+								if (selectedCat == 'W') {
+									return d3.min(d.rankings, i => +i.win_rate);
+								} else if (selectedCat == 'D') {
+									return d3.min(d.rankings, i => +i.diff_game);
+								} else {
+									return d3.min(d.rankings, i => +i.rank);
+								}
+							}), d3.max(data, d => {
+								if (selectedCat == 'W') {
+									return d3.max(d.rankings, i => +i.win_rate);
+								} else if (selectedCat == 'D') {
+									return d3.max(d.rankings, i => +i.diff_game);
+								} else {
+									return d3.max(d.rankings, i => +i.rank);
+								}
+							})]).range(getRangeForCat(selectedCat));
+					
+					let line = d3.line().x(d => x(d.year)).y(d => {
+						if (selectedCat == 'W') {
+							return y(d.win_rate);
+						} else if (selectedCat == 'D') {
+							return y(d.diff_game);
+						} else {
+							return y(d.rank);
+						}
+					});
+					
+					<!-- remove lines that are not in the selected year -->
+					let removed = teamsInPrev.filter(x => !teamsInYear.includes(x));
+					for (var i in removed) {
+						d3.select(`path.${removed[i]}`).remove();
+					}
+					
+					<!-- create new lines for the selected year -->
+					let create = teamsInYear.filter(x => !teamsInPrev.includes(x));
+					for (var i in create) {
+						let teamName = create[i];
+						lineChart.append('path').attr('d', line(lineData.filter(t => t.team == teamName)[0].values)).attr('class', `line ${teamName}`)
+						.attr('fill', 'none').attr('stroke', d3.interpolateSinebow(teamList.indexOf(teamName)/teamList.length)).style('opacity', 0)
+						.transition().duration(1200).style('opacity', 1);
+					}
+					
+					<!-- do transition for bar chart -->
+					let numGames = rankings[0].games;
+					let right_y = d3.scaleLinear().domain([0, numGames]).range([0, 470]);
+					let left_y = d3.scaleLinear().domain([0, numGames]).range([470, 0]);
+					let bar_x = d3.scaleBand().domain(teamsInYear).range([0, 440]).paddingInner(0.2).paddingOuter(0.2);
+					
+					let stats = rankings.map(r => {return {team: r.team, stats: [0, +r.W, +r.W + +r.D, +r.W + +r.D + +r.L]}});
+					
+					barChart.selectAll('g.bar').data(stats, d => d.team).join(
+						enter => enter.append('g').attr('class', d => `bar ${d.team}`).style('opacity', 0)
+								.call(enter => enter.transition().delay(1200).duration(1200).style('opacity', 1))
+								.call(function (enter) {
+									enter.selectAll('rect').data(d => ['W','D','L'].map(key => [key, d.stats, d.team], tuple => tuple[0])).enter()
+									.append('rect')
+									.attr('width', bar_x.bandwidth).attr('x', d => bar_x(d[2]))
+									.attr('height', (d, i) => left_y(d[1][i]) - left_y(d[1][i+1])).attr('y', (d, i) => left_y(d[1][i+1]))
+									.attr('fill', d => {if (d[0] == 'W') {return d3.interpolateSinebow(teamList.indexOf(d[2])/teamList.length)}
+														else if (d[0] == 'L') {return d3.rgb(d3.interpolateSinebow(teamList.indexOf(d[2])/teamList.length)).darker(2)}
+														else {return '#808080'}
+													}
+											)
+								})
+						, update => update.call(function(update) {
+									return update.selectAll('rect').data(d => ['W','D','L'].map(key => [key, d.stats, d.team], tuple => tuple[0]))
+									.transition().duration(1200)
+									.attr('width', bar_x.bandwidth).attr('x', d => bar_x(d[2]))
+									.attr('height', (d, i) => left_y(d[1][i]) - left_y(d[1][i+1])).attr('y', (d, i) => left_y(d[1][i+1]))
+								})
+					)
+					
+					<!-- remove bars that are not in the selected year -->
+					for (var i in removed) {
+						barChart.selectAll(`g.${removed[i]}`).remove();
+					}
+					
+					barChart.select('g.left_y').transition().duration(1200).call(d3.axisLeft(left_y));
+					barChart.select('g.bottom_x').transition().duration(1200).call(d3.axisBottom(bar_x));
+					barChart.select('g.right_y').transition().duration(1200).call(d3.axisRight(right_y));
+					
+					<!-- mouse hover event -->
+					mouseHoverEvent();
+				});
+				
+				<!-- change category -->
+				d3.select('#category').on('change', function(event, k) {
+					<!-- only changes the line chart -->
+					selectedCat = this.value;
+					
+					let rankings = data[selectedYear].rankings.sort((a, b) => a.rank - b.rank);
+					let teamsInYear = rankings.map(r => r.team);
+					let lineData = teamStat.filter(t => teamsInYear.indexOf(t.team) > -1);
+					
+					let x = d3.scaleTime().domain([d3.min(data, d => new Date(d.year, 1, 1)), d3.max(data, d => new Date(d.year, 1, 1))]).range([0, 560]);
+					let y = d3.scaleLinear().domain([
+							d3.min(data, d => {
+								if (selectedCat == 'W') {
+									return d3.min(d.rankings, i => +i.win_rate);
+								} else if (selectedCat == 'D') {
+									return d3.min(d.rankings, i => +i.diff_game);
+								} else {
+									return d3.min(d.rankings, i => +i.rank);
+								}
+							}), d3.max(data, d => {
+								if (selectedCat == 'W') {
+									return d3.max(d.rankings, i => +i.win_rate);
+								} else if (selectedCat == 'D') {
+									return d3.max(d.rankings, i => +i.diff_game);
+								} else {
+									return d3.max(d.rankings, i => +i.rank);
+								}
+							})]).range(getRangeForCat(selectedCat));
+					
+					let line = d3.line().x(d => x(d.year)).y(d => {
+						if (selectedCat == 'W') {
+							return y(d.win_rate);
+						} else if (selectedCat == 'D') {
+							return y(d.diff_game)
+						} else {
+							return y(d.rank);
+						}
+					});
+					
+					lineChart.select('.line_y').call(d3.axisLeft(y));
+					
+					for (var i in teamsInYear) {
+						let teamName = teamsInYear[i];
+						lineChart.select(`path.line.${teamName}`).transition().duration(1200).attr('d', line(lineData.filter(t => t.team == teamName)[0].values));
+					}
+					
+					<!-- mouse hover event -->
+					mouseHoverEvent();
+				});
+			});
+			
+		</script>
+	</body>
+</html>

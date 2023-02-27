@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>정하선_D3 Assignment</title>
+	</head>
+	<body>
+		<script src="https://d3js.org/d3.v6.min.js"></script>
+		<script>
+			<!-- helper functions -->
+			function translateHelper(x, y) {
+				return 'translate(' + x + ', ' + y + ')';
+			}
+			
+			function getColorCode(r, g, b) {
+				return 'rgb(' + r + ',' + g +  ',' + b + ')';
+			}
+			
+			function selectOldestData(d, old_id) {
+				if (d.id < old_id) {
+					return true;
+				} else {
+					return false;
+				}
+			}
+			
+			function convertArray(array) {
+				return Object.keys(array).map(function(key) {
+					return {
+							class: key, 
+							count: classes[key]
+							};
+				})
+			}
+			
+			function mouseHoverEvent() {
+				let original_r = 0;
+				let	original_c = 'black';		
+				d3.selectAll('circle').on('mouseenter', function() {
+										original_r = d3.select(this).attr('r');
+										original_c = d3.select(this).attr('fill');
+										d3.select(this).style('fill', 'black');
+										d3.select(this).attr('r', original_r * 2);
+									})
+									.on('mouseleave', function() {
+										d3.select(this).style('fill', original_c);
+										d3.select(this).attr('r', original_r);
+									});
+			}
+		</script>
+		
+		<h2>2020-26241 정하선</h2>
+		<div>
+			<button type="button" id="updateBtn" onclick="update_data();">Update</button>
+		</div>
+		<div>
+			<div id="scatterPlot" style="display:inline-block; margin-right: 20px;">
+				
+			</div>
+			<div id="barChart" style="display:inline-block; margin-left: 20px;">
+				
+			</div>
+		</div>
+		
+		<script>
+			let data = [];
+			let highest_id = 0;
+			let classes = {"A":0, "B":0, "C":0, "D":0, "E":0, "F":0, "G":0, "H":0, "I":0, "J":0};
+			let margin = {top: 20, right: 10, bottom:30, left: 40};
+			let width = 550 - margin.left - margin.right;
+			let height = 550 - margin.top - margin.bottom;
+			
+			let scatterPlot = d3.select('#scatterPlot').append('svg')
+								.attr('width', 550).attr('height', 550)
+								.append('g')
+								.attr('transform', translateHelper(margin.left, margin.top));
+			
+			let barChart = d3.select('#barChart').append('svg')
+							.attr('width', 550).attr('height',550)
+							.append('g')
+							.attr('transform', translateHelper(margin.left, margin.top));
+			
+			function create_data(num) {
+				for (var i = 0; i < num; i++){
+					dataEntry = {
+						"id": highest_id, 
+						"cx": d3.randomNormal(0, 100)(), 
+						"cy": d3.randomNormal(0, 100)(), 
+						"radius": d3.randomInt(2, 8)(), 
+						"red": d3.randomInt(0, 256)(), 
+						"green": d3.randomInt(0, 256)(), 
+						"blue": d3.randomInt(0, 256)(), 
+						"class": Array.from(Object.keys(classes))[d3.randomInt(0, 10)()]
+					};
+					data.push(dataEntry);
+					highest_id++;
+					<!-- count classes -->
+					let original_val = classes[dataEntry.class];
+					classes[dataEntry.class] = original_val + 1;
+				}
+			}
+			
+			function remove_data(strInd, endInd) {
+				<!-- sort the data in the order of id lowest to highest -->
+				data.sort(function(a, b){return a.id - b.id});
+				
+				let deletedData = data.splice(strInd, endInd);
+				
+				<!-- count classes -->
+				for (var i = 0; i < deletedData.length; i++) {
+					let original_val = classes[deletedData[i].class];
+					classes[deletedData[i].class] = original_val - 1;
+				}
+			}
+			
+			function drawScatterPlot() {
+				let s_x = d3.scaleLinear().domain([
+						d3.min(data, d => d.cx),
+						d3.max(data, d => d.cx)]).range([0, width]);
+			  
+				let s_y = d3.scaleLinear().domain([
+						d3.min(data, d => d.cy),
+						d3.max(data, d => d.cy)]).range([height, 0]);
+				
+				<!-- scatter plot axes -->
+				scatterPlot.select('#s_x').transition().duration(3000)
+					.attr('transform', translateHelper(0, height))
+					.call(d3.axisBottom(s_x));
+				scatterPlot.select('#s_y').transition().duration(3000)
+					.call(d3.axisLeft(s_y));
+				
+				scatterPlot.selectAll('circle').data(data)
+					.transition().duration(3000)
+					.attr('cx', d => s_x(d.cx)).attr('cy', d => s_y(d.cy))
+					.attr('fill', d => getColorCode(d.red, d.green, d.blue))
+					.attr('r', d => (d.radius))
+					.attr('id', d => d.id);
+				
+				<!-- fade in transition -->
+				let newDots = scatterPlot.selectAll('circle').data(data).enter();
+				newDots.append('circle').attr('cx', d => s_x(d.cx)).attr('cy', d => s_y(d.cy))
+					.attr('fill', d => getColorCode(d.red, d.green, d.blue))
+					.attr('r', d => (d.radius))
+					.attr('id', d => d.id)
+					.style("opacity", 0)
+					.transition().delay(3000).duration(1000)
+					.style("opacity", 1);
+					
+				mouseHoverEvent();
+
+			}
+			
+			function updateBarChart() {
+				let b_y = d3.scaleLinear().domain([0, Math.max(d3.max(Object.values(classes)), 18)]).range([height, 0]);
+				let color = d3.scaleOrdinal(d3.schemeCategory10);
+				
+				barChart.selectAll('rect').data(convertArray(classes))
+					.transition().duration(2000)
+					.attr('class', d => d.class)
+					.attr('height', d => height - b_y(d.count)).attr('y', d => b_y(d.count))
+					.attr('fill', d => color(d.class));
+				
+				<!-- bar chart y-axis -->
+				barChart.select('#b_y').transition().duration(2000).call(d3.axisLeft(b_y));
+			}
+			
+			function update_data() {
+				d3.select('#updateBtn').attr('disabled', true);
+				
+				<!-- remove dots -->				
+				remove_data(0, 25);
+				scatterPlot.selectAll('circle').data(data, function(d) { return d.id; }).exit().remove();
+				
+				for(var i = 0; i < data.length; i++) {
+					data[i].cx = d3.randomNormal(0, 100)();
+					data[i].cy = d3.randomNormal(0, 100)();
+					data[i].radius = d3.randomUniform(2, 8)();
+					data[i].red = d3.randomInt(0, 256)();
+					data[i].green = d3.randomInt(0, 256)();
+					data[i].blue = d3.randomInt(0, 256)();
+				}
+				
+				<!-- add new data -->
+				create_data(25);
+				
+				<!-- redraw scatter plot -->
+				drawScatterPlot();
+				
+				<!-- update bars -->
+				updateBarChart();
+				
+				d3.select('#updateBtn').transition().delay(4000).attr('disabled', null);
+				
+			}
+			
+			
+			create_data(100);
+			
+			let s_x = d3.scaleLinear().domain([
+					d3.min(data, d => d.cx),
+					d3.max(data, d => d.cx)]).range([0, width]);
+		  
+			let s_y = d3.scaleLinear().domain([
+					d3.min(data, d => d.cy),
+					d3.max(data, d => d.cy)]).range([height, 0]);
+			
+			scatterPlot.selectAll('circle').data(data).enter()
+				.append('circle').attr('cx', d => s_x(d.cx)).attr('cy', d => s_y(d.cy))
+				.attr('fill', d => getColorCode(d.red, d.green, d.blue))
+				.attr('r', d => (d.radius))
+				.attr('id', d => d.id)
+			
+			<!-- scatter plot axes -->
+			scatterPlot.append('g').attr('id', 's_x').attr('transform', translateHelper(0, height))
+				.call(d3.axisBottom(s_x));
+			scatterPlot.append('g').attr('id', 's_y').call(d3.axisLeft(s_y));
+			
+			<!-- bring dots to front -->
+			scatterPlot.selectAll('circle').raise();
+			
+			<!-- mouse hover event -->
+			mouseHoverEvent();
+			
+			
+			let b_x = d3.scaleBand().domain(Object.keys(classes)).range([0, width]).paddingInner(0.2).paddingOuter(0.2);
+			let b_y = d3.scaleLinear().domain([0, Math.max(d3.max(Object.values(classes)), 18)]).range([height, 0]);
+			let color = d3.scaleOrdinal(d3.schemeCategory10);
+			
+			barChart.selectAll('bar').data(convertArray(classes)).enter()
+				.append('rect').attr('class', d => d.class)
+				.attr('width', b_x.bandwidth).attr('x', d => b_x(d.class))
+				.attr('height', d => height - b_y(d.count)).attr('y', d => b_y(d.count))
+				.attr('fill', d => color(d.class));
+			
+			<!-- bar chart axes -->
+			barChart.append('g').attr('transform', translateHelper(0, height)).attr('id', 'b_x')
+				.call(d3.axisBottom(b_x));
+			barChart.append('g').attr('id', 'b_x').call(d3.axisLeft(b_y));
+		</script>
+	</body>
+</html>
